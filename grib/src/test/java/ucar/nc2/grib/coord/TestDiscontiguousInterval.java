@@ -154,6 +154,46 @@ public class TestDiscontiguousInterval {
     }
   }
 
+  @Test
+  @Category(NeedsCdmUnitTest.class)
+  public void testFeatureCollectionBest_isStrictlyMonotonicallyIncreasing_noBuilder() throws IOException {
+    final String spec =
+        TestDir.cdmUnitTestDir + "/gribCollections/gfs_conus80/20231027/GFS_CONUS_80km_#yyyyMMdd_HHmm#\\.grib1$";
+    final FeatureCollectionConfig config = new FeatureCollectionConfig("testFeatureCollectionBest_noBuilder", "path",
+        FeatureCollectionType.GRIB1, spec, null, null, null, "file", null);
+    final boolean changed = GribCdmIndex.updateGribCollection(config, CollectionUpdateType.always, null);
+    assertThat(changed).isTrue();
+    final String topLevelIndex = GribCdmIndex.getTopIndexFileFromConfig(config).getAbsolutePath();
+
+    final String varName = "Total_precipitation_surface_Mixed_intervals_Accumulation";
+    checkTimeCoord2D_fromIntervals_isStrictlyMonotonicallyIncreasing_noBuilder(topLevelIndex, varName, "Best/");
+  }
+
+  private void checkTimeCoord2D_fromIntervals_isStrictlyMonotonicallyIncreasing_noBuilder(String testfile, String varName,
+                                                                                String groupName) throws IOException {
+    try (NetcdfFile nc = NetcdfFile.open(testfile)) {
+      Variable dataVar = nc.findVariable(groupName + varName);
+      Assert.assertNotNull(dataVar);
+
+      Dimension timeDim = null;
+      for (Dimension dim : dataVar.getDimensions()) {
+        if (dim.getShortName().startsWith("time")) {
+          timeDim = dim;
+          break;
+        }
+      }
+      Variable timeCoordVar = nc.findVariable(groupName + timeDim.getShortName());
+      Assert.assertNotNull(timeCoordVar);
+
+      Attribute att = timeCoordVar.findAttribute("bounds");
+      Assert.assertNotNull(att);
+      Assert.assertEquals(timeDim.getShortName() + "_bounds", att.getStringValue());
+
+      Array timeCoordValues = timeCoordVar.read();
+      checkTimeCoordVariable2D_IsStrictlyMonotonicallyIncreasing(timeDim.getLength(), timeCoordValues);
+    }
+  }
+
   private void checkTimeCoordVariable2D_IsStrictlyMonotonicallyIncreasing(int timeDimLength, Array timeCoordValues) {
     double currentValue = timeCoordValues.getDouble(0);
     double prevValue = currentValue;
